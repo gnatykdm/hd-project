@@ -1,15 +1,6 @@
 @echo off
 SETLOCAL EnableDelayedExpansion
 
-IF EXIST venv\Scripts\activate.bat (
-    echo Activating Virtual Environment...
-    call venv\Scripts\activate.bat
-) ELSE (
-    echo Error: Virtual environment 'venv' not found.
-    pause
-    exit /b
-)
-
 echo Running Alembic Migrations...
 alembic upgrade head
 IF %ERRORLEVEL% NEQ 0 (
@@ -25,6 +16,6 @@ IF /I "%CHOICE%"=="y" (
 )
 
 echo Starting Main Application...
-python main.py
+streamlit run main.py
 
 pause

@@ -1,16 +1,5 @@
 #!/bin/bash
 
-if [ -d "venv" ]; then
-    echo "Activating Virtual Environment..."
-    source venv/bin/activate
-elif [ -d ".venv" ]; then
-    echo "Activating .venv Virtual Environment..."
-    source .venv/bin/activate
-else
-    echo "Error: Virtual environment not found."
-    exit 1
-fi
-
 echo "Running Alembic Migrations..."
 alembic upgrade head
 if [ $? -ne 0 ]; then
@@ -25,4 +14,4 @@ if [[ "$CHOICE" == "y" || "$CHOICE" == "Y" ]]; then
 fi
 
 echo "Starting Main Application..."
-python3 main.py
+streamlit run main.py
