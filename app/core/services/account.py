@@ -1,52 +1,14 @@
-from sqlalchemy.orm import Session, joinedload
-from sqlalchemy import select
-from app.db.models import Account
-from app.db.base import get_db
-from abc import ABC, abstractmethod
 from typing import List, Optional
 
+from sqlalchemy.orm import Session, joinedload
+from sqlalchemy import select, func
 
-class AccountRepository(ABC):    
-    @abstractmethod
-    def get_all(self, pagination: int = 25, offset: int = 0) -> List[Account]:
-        pass
-    
-    @abstractmethod
-    def get_acc_by_id(self, idx: int) -> Optional[Account]:
-        pass
-    
-    @abstractmethod
-    def get_acc_by_number(self, account_number: str) -> Optional[Account]:
-        pass
-    
-    @abstractmethod
-    def get_accounts_by_customer(self, customer_id: int) -> List[Account]:
-        pass
-    
-    @abstractmethod 
-    def get_accounts_by_branch(self, branch_id: int) -> List[Account]:
-        pass
-    
-    @abstractmethod
-    def get_active_accounts(self, pagination: int = 25, offset: int = 0) -> List[Account]:
-        pass
-    
-    @abstractmethod
-    def create(self, account: Account) -> Account:
-        pass
-    
-    @abstractmethod
-    def update(self, account: Account) -> Account:
-        pass
-    
-    @abstractmethod
-    def delete(self, idx: int) -> bool:
-        pass
+from app.db.models import Account
+from app.db.base import get_db
 
-
-class AccountService(AccountRepository):
-    def __init__(self, db: Session):
-        self.db = db
+class AccountService:    
+    def __init__(self, db: Session) -> None:
+        self.db: Session = db
     
     def get_all(self, pagination: int = 25, offset: int = 0) -> List[Account]:
         stmt = (
@@ -85,30 +47,6 @@ class AccountService(AccountRepository):
         result = self.db.execute(stmt)
         return result.scalar_one_or_none()
     
-    def create_account(self, customer_id: int, branch_id: int, account_number: str, account_type: str = "CHECKING") -> Account:
-        """
-        Метод-адаптер для UI: принимает простые типы и создает объект модели.
-        """
-        # Создаем объект модели Account
-        new_account = Account(
-            customer_id=customer_id,
-            branch_id=branch_id,
-            account_number=account_number,
-            account_type=account_type,
-            balance=0.0,      # Начальный баланс
-            is_active=True    # По умолчанию активен
-        )
-        # Вызываем ваш базовый метод create, который делает add и commit
-        return self.create(new_account)
-
-    def update_account_status(self, idx: int, status: bool) -> bool:
-        account = self.get_acc_by_id(idx)
-        if account:
-            account.is_active = status
-            self.db.commit()
-            return True
-        return False
-    
     def get_accounts_by_customer(self, customer_id: int) -> List[Account]:
         stmt = (
             select(Account)
@@ -141,7 +79,12 @@ class AccountService(AccountRepository):
         result = self.db.execute(stmt)
         return list(result.scalars().all())
     
-    def get_accounts_by_type(self, account_type: str, pagination: int = 25, offset: int = 0) -> List[Account]:
+    def get_accounts_by_type(
+        self, 
+        account_type: str, 
+        pagination: int = 25, 
+        offset: int = 0
+    ) -> List[Account]:
         stmt = (
             select(Account)
             .options(
@@ -155,45 +98,46 @@ class AccountService(AccountRepository):
         result = self.db.execute(stmt)
         return list(result.scalars().all())
     
-    def create(self, account: Account) -> Account:
-        self.db.add(account)
+    def create_account(
+        self, 
+        customer_id: int, 
+        branch_id: int, 
+        account_number: str, 
+        account_type: str = "CHECKING"
+    ) -> Account:
+        new_account: Account = Account(
+            customer_id=customer_id,
+            branch_id=branch_id,
+            account_number=account_number,
+            account_type=account_type,
+            balance=0.0,
+            is_active=True
+        )
+        self.db.add(new_account)
         self.db.commit()
-        self.db.refresh(account)
-        return account
+        self.db.refresh(new_account)
+        return new_account
     
-    def update(self, account: Account) -> Account:
-        self.db.commit()
-        self.db.refresh(account)
-        return account
-    
-    def delete(self, idx: int) -> bool:
-        account = self.get_acc_by_id(idx)
+    def update_account_status(self, idx: int, status: bool) -> bool:
+        account: Optional[Account] = self.get_acc_by_id(idx)
         if account:
-            account.is_active = False
-            self.db.commit()
-            return True
-        return False
-    
-    def hard_delete(self, idx: int) -> bool:
-        account = self.get_acc_by_id(idx)
-        if account:
-            self.db.delete(account)
+            account.is_active = status
             self.db.commit()
             return True
         return False
     
     def count_all(self) -> int:
-        stmt = select(Account)
+        stmt = select(func.count(Account.id))
         result = self.db.execute(stmt)
-        return len(list(result.scalars().all()))
+        return result.scalar() or 0
     
     def count_active(self) -> int:
-        stmt = select(Account).where(Account.is_active == True)
+        stmt = select(func.count(Account.id)).where(Account.is_active == True)
         result = self.db.execute(stmt)
-        return len(list(result.scalars().all()))
+        return result.scalar() or 0
 
 
-def get_account_repository(db: Session = None) -> AccountService:
+def get_account_service(db: Optional[Session] = None) -> AccountService:
     if db is None:
         db = next(get_db())
     return AccountService(db)

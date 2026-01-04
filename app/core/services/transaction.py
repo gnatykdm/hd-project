@@ -1,80 +1,36 @@
+from typing import List, Optional, Dict, Any
+from datetime import datetime
+
 from sqlalchemy.orm import Session, joinedload
-from sqlalchemy import select, func, and_, or_, desc
-from app.db.models import Transaction, Account
+from sqlalchemy import select, func, and_
+
+from app.db.models import Transaction
 from app.db.base import get_db
-from abc import ABC, abstractmethod
-from typing import List, Optional
-from datetime import datetime, timedelta
 
-from PyQt6.QtWidgets import QMessageBox
 
-class TransactionRepository(ABC):
-    
-    @abstractmethod
-    def get_all(self, pagination: int = 25, offset: int = 0) -> List[Transaction]:
-        pass
-    
-    @abstractmethod
-    def get_by_id(self, idx: int) -> Optional[Transaction]:
-        pass
-    
-    @abstractmethod
-    def get_by_account(self, account_id: int, pagination: int = 25, offset: int = 0) -> List[Transaction]:
-        pass
-    
-    @abstractmethod
-    def get_by_category(self, category: str, pagination: int = 25, offset: int = 0) -> List[Transaction]:
-        pass
-    
-    @abstractmethod
-    def get_by_date_range(self, start_date: datetime, end_date: datetime, pagination: int = 25, offset: int = 0) -> List[Transaction]:
-        pass
-    
-    @abstractmethod
-    def get_by_amount_range(self, min_amount: float, max_amount: float, pagination: int = 25, offset: int = 0) -> List[Transaction]:
-        pass
-    
-    @abstractmethod
-    def create(self, transaction: Transaction) -> Transaction:
-        pass
-    
-    @abstractmethod
-    def update(self, transaction: Transaction) -> Transaction:
-        pass
-    
-    @abstractmethod
-    def delete(self, idx: int) -> bool:
-        pass
-    
-    @abstractmethod
-    def count_all(self) -> int:
-        pass
+class TransactionService:    
+    def __init__(self, db: Session) -> None:
+        self.db: Session = db
 
-class TransactionService(TransactionRepository):
-    def __init__(self, db: Session):
-        self.db = db
-
-    def create(self, **data) -> Transaction:
-        """Создает транзакцию напрямую из переданных данных"""
-        new_tx = Transaction(**data)
+    def create_transaction(
+        self, 
+        account_id: int, 
+        amount: float, 
+        category: str, 
+        merchant_name: str
+    ) -> Transaction:
+        new_tx: Transaction = Transaction(
+            account_id=account_id,
+            amount=amount,
+            category=category,
+            merchant_name=merchant_name,
+            timestamp=datetime.utcnow()
+        )
         self.db.add(new_tx)
         self.db.commit()
         self.db.refresh(new_tx)
         return new_tx
 
-    def update(self, idx: int, **data) -> Optional[Transaction]:
-        """Находит транзакцию и обновляет её поля из словаря data"""
-        transaction = self.get_by_id(idx)
-        if transaction:
-            for key, value in data.items():
-                if hasattr(transaction, key):
-                    setattr(transaction, key, value)
-            
-            self.db.commit()
-            self.db.refresh(transaction)
-            return transaction
-        return None
-    
     def get_all(self, pagination: int = 25, offset: int = 0) -> List[Transaction]:
         stmt = (
             select(Transaction)
@@ -94,7 +50,12 @@ class TransactionService(TransactionRepository):
         result = self.db.execute(stmt)
         return result.scalar_one_or_none()
     
-    def get_by_account(self, account_id: int, pagination: int = 25, offset: int = 0) -> List[Transaction]:
+    def get_by_account(
+        self, 
+        account_id: int, 
+        pagination: int = 25, 
+        offset: int = 0
+    ) -> List[Transaction]:
         stmt = (
             select(Transaction)
             .where(Transaction.account_id == account_id)
@@ -105,150 +66,12 @@ class TransactionService(TransactionRepository):
         result = self.db.execute(stmt)
         return list(result.scalars().all())
     
-    def get_by_category(self, category: str, pagination: int = 25, offset: int = 0) -> List[Transaction]:
-        stmt = (
-            select(Transaction)
-            .where(Transaction.category == category)
-            .order_by(Transaction.timestamp.desc())
-            .limit(pagination)
-            .offset(offset)
-        )
-        result = self.db.execute(stmt)
-        return list(result.scalars().all())
-    
-    def get_by_date_range(self, start_date: datetime, end_date: datetime, pagination: int = 25, offset: int = 0) -> List[Transaction]:
-        stmt = (
-            select(Transaction)
-            .where(
-                and_(
-                    Transaction.timestamp >= start_date,
-                    Transaction.timestamp <= end_date
-                )
-            )
-            .order_by(Transaction.timestamp.desc())
-            .limit(pagination)
-            .offset(offset)
-        )
-        result = self.db.execute(stmt)
-        return list(result.scalars().all())
-    
-    def get_by_amount_range(self, min_amount: float, max_amount: float, pagination: int = 25, offset: int = 0) -> List[Transaction]:
-        stmt = (
-            select(Transaction)
-            .where(
-                and_(
-                    Transaction.amount >= min_amount,
-                    Transaction.amount <= max_amount
-                )
-            )
-            .order_by(Transaction.timestamp.desc())
-            .limit(pagination)
-            .offset(offset)
-        )
-        result = self.db.execute(stmt)
-        return list(result.scalars().all())
-    
-    def get_by_account_and_date_range(self, account_id: int, start_date: datetime, end_date: datetime) -> List[Transaction]:
-        stmt = (
-            select(Transaction)
-            .where(
-                and_(
-                    Transaction.account_id == account_id,
-                    Transaction.timestamp >= start_date,
-                    Transaction.timestamp <= end_date
-                )
-            )
-            .order_by(Transaction.timestamp.desc())
-        )
-        result = self.db.execute(stmt)
-        return list(result.scalars().all())
-    
-    def get_by_merchant(self, merchant_name: str, pagination: int = 25, offset: int = 0) -> List[Transaction]:
-        stmt = (
-            select(Transaction)
-            .where(Transaction.merchant_name == merchant_name)
-            .order_by(Transaction.timestamp.desc())
-            .limit(pagination)
-            .offset(offset)
-        )
-        result = self.db.execute(stmt)
-        return list(result.scalars().all())
-    
-    def search_transactions(self, query: str, pagination: int = 25, offset: int = 0) -> List[Transaction]:
-        search_pattern = f"%{query}%"
-        stmt = (
-            select(Transaction)
-            .where(
-                or_(
-                    Transaction.category.ilike(search_pattern),
-                    Transaction.merchant_name.ilike(search_pattern)
-                )
-            )
-            .order_by(Transaction.timestamp.desc())
-            .limit(pagination)
-            .offset(offset)
-        )
-        result = self.db.execute(stmt)
-        return list(result.scalars().all())
-    
-    def get_largest_transactions(self, limit: int = 10, start_date: datetime = None, end_date: datetime = None) -> List[Transaction]:
-        stmt = select(Transaction)
-        
-        if start_date and end_date:
-            stmt = stmt.where(
-                and_(
-                    Transaction.timestamp >= start_date,
-                    Transaction.timestamp <= end_date
-                )
-            )
-        
-        stmt = stmt.order_by(Transaction.amount.desc()).limit(limit)
-        result = self.db.execute(stmt)
-        return list(result.scalars().all())
-    
-    def get_recent_transactions(self, days: int = 7, pagination: int = 25, offset: int = 0) -> List[Transaction]:
-        cutoff_date = datetime.utcnow() - timedelta(days=days)
-        stmt = (
-            select(Transaction)
-            .where(Transaction.timestamp >= cutoff_date)
-            .order_by(Transaction.timestamp.desc())
-            .limit(pagination)
-            .offset(offset)
-        )
-        result = self.db.execute(stmt)
-        return list(result.scalars().all())
-    
-    def get_total_by_account(self, account_id: int, start_date: datetime = None, end_date: datetime = None) -> float:
-        stmt = select(func.sum(Transaction.amount)).where(Transaction.account_id == account_id)
-        
-        if start_date and end_date:
-            stmt = stmt.where(
-                and_(
-                    Transaction.timestamp >= start_date,
-                    Transaction.timestamp <= end_date
-                )
-            )
-        
-        result = self.db.execute(stmt)
-        total = result.scalar()
-        return float(total) if total else 0.0
-    
-    def get_total_by_category(self, category: str, start_date: datetime = None, end_date: datetime = None) -> float:
-        stmt = select(func.sum(Transaction.amount)).where(Transaction.category == category)
-        
-        if start_date and end_date:
-            stmt = stmt.where(
-                and_(
-                    Transaction.timestamp >= start_date,
-                    Transaction.timestamp <= end_date
-                )
-            )
-        
-        result = self.db.execute(stmt)
-        total = result.scalar()
-        return float(total) if total else 0.0
-    
-    def get_category_breakdown(self, account_id: int = None, start_date: datetime = None, end_date: datetime = None) -> List[dict]:
+    def get_category_breakdown(
+        self, 
+        account_id: Optional[int] = None, 
+        start_date: Optional[datetime] = None, 
+        end_date: Optional[datetime] = None
+    ) -> List[Dict[str, Any]]:
         stmt = (
             select(
                 Transaction.category,
@@ -281,22 +104,16 @@ class TransactionService(TransactionRepository):
             for row in result.all()
         ]
     
-    def get_merchant_breakdown(self, account_id: int = None, start_date: datetime = None, end_date: datetime = None, limit: int = 10) -> List[dict]:
-        stmt = (
-            select(
-                Transaction.merchant_name,
-                func.count(Transaction.id).label('count'),
-                func.sum(Transaction.amount).label('total')
-            )
-            .where(Transaction.merchant_name.isnot(None))
-            .group_by(Transaction.merchant_name)
-            .order_by(desc('total'))
-            .limit(limit)
+    def get_total_by_account(
+        self, 
+        account_id: int, 
+        start_date: Optional[datetime] = None, 
+        end_date: Optional[datetime] = None
+    ) -> float:
+        stmt = select(func.sum(Transaction.amount)).where(
+            Transaction.account_id == account_id
         )
         
-        if account_id:
-            stmt = stmt.where(Transaction.account_id == account_id)
-        
         if start_date and end_date:
             stmt = stmt.where(
                 and_(
@@ -306,62 +123,13 @@ class TransactionService(TransactionRepository):
             )
         
         result = self.db.execute(stmt)
-        return [
-            {
-                'merchant_name': row[0],
-                'count': row[1],
-                'total': float(row[2]) if row[2] else 0.0
-            }
-            for row in result.all()
-        ]
-    
-    def get_average_transaction_amount(self, account_id: int = None, start_date: datetime = None, end_date: datetime = None) -> float:
-        stmt = select(func.avg(Transaction.amount))
-        
-        if account_id:
-            stmt = stmt.where(Transaction.account_id == account_id)
-        
-        if start_date and end_date:
-            stmt = stmt.where(
-                and_(
-                    Transaction.timestamp >= start_date,
-                    Transaction.timestamp <= end_date
-                )
-            )
-        
-        result = self.db.execute(stmt)
-        avg = result.scalar()
-        return float(avg) if avg else 0.0
-    
-    def bulk_create(self, transactions: List[Transaction]) -> List[Transaction]:
-        self.db.add_all(transactions)
-        self.db.commit()
-        for transaction in transactions:
-            self.db.refresh(transaction)
-        return transactions
-    
-    def delete(self, idx: int) -> bool:
-        transaction = self.get_by_id(idx)
-        if transaction:
-            self.db.delete(transaction)
-            self.db.commit()
-            return True
-        return False
-    
-    def delete_by_account(self, account_id: int) -> int:
-        stmt = select(Transaction).where(Transaction.account_id == account_id)
-        result = self.db.execute(stmt)
-        transactions = list(result.scalars().all())
-        count = len(transactions)
-        for transaction in transactions:
-            self.db.delete(transaction)
-        self.db.commit()
-        return count
+        total = result.scalar()
+        return float(total) if total else 0.0
     
     def count_all(self) -> int:
         stmt = select(func.count(Transaction.id))
         result = self.db.execute(stmt)
-        return result.scalar()
+        return result.scalar() or 0
     
     def count_by_account(self, account_id: int) -> int:
         stmt = (
@@ -369,18 +137,10 @@ class TransactionService(TransactionRepository):
             .where(Transaction.account_id == account_id)
         )
         result = self.db.execute(stmt)
-        return result.scalar()
-    
-    def count_by_category(self, category: str) -> int:
-        stmt = (
-            select(func.count(Transaction.id))
-            .where(Transaction.category == category)
-        )
-        result = self.db.execute(stmt)
-        return result.scalar()
+        return result.scalar() or 0
 
 
-def get_transaction_service(db: Session = None) -> TransactionService:
+def get_transaction_service(db: Optional[Session] = None) -> TransactionService:
     if db is None:
         db = next(get_db())
     return TransactionService(db)
