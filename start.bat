@@ -16,6 +16,6 @@ IF /I "%CHOICE%"=="y" (
 )
 
 echo Starting Main Application...
-streamlit run main.py
+python main.py
 
 pause

@@ -85,6 +85,30 @@ class AccountService(AccountRepository):
         result = self.db.execute(stmt)
         return result.scalar_one_or_none()
     
+    def create_account(self, customer_id: int, branch_id: int, account_number: str, account_type: str = "CHECKING") -> Account:
+        """
+        Метод-адаптер для UI: принимает простые типы и создает объект модели.
+        """
+        # Создаем объект модели Account
+        new_account = Account(
+            customer_id=customer_id,
+            branch_id=branch_id,
+            account_number=account_number,
+            account_type=account_type,
+            balance=0.0,      # Начальный баланс
+            is_active=True    # По умолчанию активен
+        )
+        # Вызываем ваш базовый метод create, который делает add и commit
+        return self.create(new_account)
+
+    def update_account_status(self, idx: int, status: bool) -> bool:
+        account = self.get_acc_by_id(idx)
+        if account:
+            account.is_active = status
+            self.db.commit()
+            return True
+        return False
+    
     def get_accounts_by_customer(self, customer_id: int) -> List[Account]:
         stmt = (
             select(Account)

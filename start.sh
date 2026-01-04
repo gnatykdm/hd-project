@@ -14,4 +14,4 @@ if [[ "$CHOICE" == "y" || "$CHOICE" == "Y" ]]; then
 fi
 
 echo "Starting Main Application..."
-streamlit run main.py
+python3 main.py

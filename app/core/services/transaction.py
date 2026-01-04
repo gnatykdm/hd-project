@@ -6,6 +6,7 @@ from abc import ABC, abstractmethod
 from typing import List, Optional
 from datetime import datetime, timedelta
 
+from PyQt6.QtWidgets import QMessageBox
 
 class TransactionRepository(ABC):
     
@@ -49,11 +50,30 @@ class TransactionRepository(ABC):
     def count_all(self) -> int:
         pass
 
-
 class TransactionService(TransactionRepository):
-    
     def __init__(self, db: Session):
         self.db = db
+
+    def create(self, **data) -> Transaction:
+        """Создает транзакцию напрямую из переданных данных"""
+        new_tx = Transaction(**data)
+        self.db.add(new_tx)
+        self.db.commit()
+        self.db.refresh(new_tx)
+        return new_tx
+
+    def update(self, idx: int, **data) -> Optional[Transaction]:
+        """Находит транзакцию и обновляет её поля из словаря data"""
+        transaction = self.get_by_id(idx)
+        if transaction:
+            for key, value in data.items():
+                if hasattr(transaction, key):
+                    setattr(transaction, key, value)
+            
+            self.db.commit()
+            self.db.refresh(transaction)
+            return transaction
+        return None
     
     def get_all(self, pagination: int = 25, offset: int = 0) -> List[Transaction]:
         stmt = (
@@ -313,23 +333,12 @@ class TransactionService(TransactionRepository):
         avg = result.scalar()
         return float(avg) if avg else 0.0
     
-    def create(self, transaction: Transaction) -> Transaction:
-        self.db.add(transaction)
-        self.db.commit()
-        self.db.refresh(transaction)
-        return transaction
-    
     def bulk_create(self, transactions: List[Transaction]) -> List[Transaction]:
         self.db.add_all(transactions)
         self.db.commit()
         for transaction in transactions:
             self.db.refresh(transaction)
         return transactions
-    
-    def update(self, transaction: Transaction) -> Transaction:
-        self.db.commit()
-        self.db.refresh(transaction)
-        return transaction
     
     def delete(self, idx: int) -> bool:
         transaction = self.get_by_id(idx)

@@ -63,6 +63,11 @@ class CustomerService(CustomerRepository):
         result = self.db.execute(stmt)
         return list(result.scalars().all())
     
+    def get_all_customers(self) -> List[Customer]:
+        stmt = select(Customer)
+        result = self.db.execute(stmt)
+        return list(result.scalars().all())
+
     def get_by_id(self, idx: int) -> Optional[Customer]:
         stmt = select(Customer).where(Customer.id == idx)
         result = self.db.execute(stmt)
@@ -146,6 +151,15 @@ class CustomerService(CustomerRepository):
         self.db.refresh(customer)
         return customer
     
+    def create_customer(self, full_name: str, email: str, credit_score: int) -> Customer:
+        new_customer = Customer(
+            full_name=full_name,
+            email=email,
+            credit_score=credit_score,
+            customer_segment="Standard"
+        )
+        return self.create(new_customer)
+    
     def update(self, customer: Customer) -> Customer:
         self.db.commit()
         self.db.refresh(customer)
@@ -182,7 +196,21 @@ class CustomerService(CustomerRepository):
         result = self.db.execute(stmt)
         avg = result.scalar()
         return float(avg) if avg else 0.0
+    
+    def get_all_segments(self) -> List[str]:
+        # Возвращаем список уникальных сегментов для ComboBox
+        stmt = select(Customer.customer_segment).distinct()
+        result = self.db.execute(stmt)
+        # Убираем None, если поле необязательное
+        return [r for r in result.scalars().all() if r is not None]
 
+    def count_by_segment(self, segment: str) -> int:
+        stmt = (
+            select(func.count(Customer.id))
+            .where(Customer.customer_segment == segment)
+        )
+        result = self.db.execute(stmt)
+        return result.scalar() or 0
 
 def get_customer_service(db: Session = None) -> CustomerService:
     if db is None:
