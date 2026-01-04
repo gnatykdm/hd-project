@@ -33,7 +33,6 @@ class DataManagementTab(QWidget):
         self.menu_list.setFixedWidth(220)
         self.menu_list.setStyleSheet(f"""
             QListWidget {{
-                background: {DarkPalette.BG_LIGHT.name()};
                 border-radius: 15px;
                 border: 1px solid {DarkPalette.BORDER.name()};
                 padding: 10px;
@@ -47,7 +46,6 @@ class DataManagementTab(QWidget):
                 padding-left: 10px;
             }}
             QListWidget::item:selected {{
-                background: {DarkPalette.ACCENT_BLUE.name()}33;
                 color: {DarkPalette.ACCENT_BLUE.name()};
                 font-weight: bold;
             }}
@@ -63,7 +61,12 @@ class DataManagementTab(QWidget):
 
         right_container: QVBoxLayout = QVBoxLayout()
         self.stack = QStackedWidget()
-        self.stack.setStyleSheet(f"background: {DarkPalette.BG_MEDIUM.name()}; border-radius: 15px;")
+        self.stack.setStyleSheet(
+            f"""
+            background: {DarkPalette.BG_MEDIUM.name()}; 
+            border-radius: 15px;
+            """
+        )
         
         self.stack.addWidget(self._create_customer_page())
         self.stack.addWidget(self._create_account_page())
@@ -95,6 +98,20 @@ class DataManagementTab(QWidget):
         main_layout.addLayout(right_container, 1)
         self.menu_list.setCurrentRow(0)
 
+    def _validate_inputs(self, inputs: Dict[str, QLineEdit]) -> bool:
+        for key, edit in inputs.items():
+            text = edit.text().strip()
+            validator: Optional[QValidator] = edit.validator()
+            if validator:
+                state, _, _ = validator.validate(text, 0)
+                if state != QValidator.State.Acceptable:
+                    self._error(f"Invalid input in field: {key}")
+                    return False
+            if text == "":
+                self._error(f"Field '{key}' cannot be empty")
+                return False
+        return True
+
     def switch_mode(self, index: int) -> None:
         self.stack.setCurrentIndex(index)
         item = self.menu_list.item(index)
@@ -102,7 +119,6 @@ class DataManagementTab(QWidget):
             self.status_label.setText(f"Switching to mode: {item.text()}")
 
     def _create_customer_page(self) -> QWidget:
-        """Create the customer registration page."""
         return self._build_base_page("REGISTER CUSTOMER", [
             ("Full Name", "txt_name", None),
             ("Email Address", "txt_email", None),
@@ -110,7 +126,6 @@ class DataManagementTab(QWidget):
         ], "Create Record", self.handle_create_customer)
 
     def _create_account_page(self) -> QWidget:
-        """Create the account opening page."""
         return self._build_base_page("OPEN NEW ACCOUNT", [
             ("Target Customer ID", "num_cust_id", QIntValidator()),
             ("Branch Code", "num_branch_id", QIntValidator()),
@@ -118,7 +133,6 @@ class DataManagementTab(QWidget):
         ], "Activate Account", self.handle_create_account)
 
     def _create_tx_page(self) -> QWidget:
-        """Create the transaction recording page."""
         return self._build_base_page("NEW TRANSACTION", [
             ("Source Account ID", "num_acc_id_tx", QIntValidator()),
             ("Transaction Amount", "num_amount", QDoubleValidator()),
@@ -231,13 +245,16 @@ class DataManagementTab(QWidget):
         return page
 
     def handle_create_customer(self, inputs: Dict[str, QLineEdit]) -> None:
+        if not self._validate_inputs(inputs):
+            return
+
         try:
             name: str = inputs['txt_name'].text().strip()
             email: str = inputs['txt_email'].text().strip()
-            score: int = int(inputs['num_score'].text() or 0)
-            
-            if not name or "@" not in email:
-                raise ValueError("Valid Name and Email are required")
+            score: int = int(inputs['num_score'].text())
+
+            if "@" not in email:
+                raise ValueError("Email must be valid")
 
             new_cust = self.services['customer'].create_customer(name, email, score)
             self._success(f"Customer {name} (ID: {new_cust.id}) registered!")
@@ -246,11 +263,13 @@ class DataManagementTab(QWidget):
             self._error(str(e))
 
     def handle_create_account(self, inputs: Dict[str, QLineEdit]) -> None:
+        if not self._validate_inputs(inputs):
+            return
         try:
             c_id: int = int(inputs['num_cust_id'].text())
             b_id: int = int(inputs['num_branch_id'].text())
             num: str = inputs['txt_acc_num'].text().strip()
-            
+
             self.services['account'].create_account(c_id, b_id, num, "CHECKING")
             self._success(f"Account {num} is now active.")
             self._clear_inputs(inputs)
@@ -258,11 +277,13 @@ class DataManagementTab(QWidget):
             self._error(str(e))
 
     def handle_post_transaction(self, inputs: Dict[str, QLineEdit]) -> None:
+        if not self._validate_inputs(inputs):
+            return
         try:
             a_id: int = int(inputs['num_acc_id_tx'].text())
             amt: float = float(inputs['num_amount'].text().replace(',', '.'))
             cat: str = inputs['txt_cat'].text().strip()
-            
+
             self.services['transaction'].create_transaction(a_id, amt, cat, "Manual System Entry")
             self._success(f"Funds ${amt} processed for Account {a_id}.")
             self._clear_inputs(inputs)

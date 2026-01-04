@@ -4,8 +4,8 @@ from PyQt6.QtWidgets import (
     QFrame, QLabel, QPushButton, QMessageBox, QHeaderView
 )
 
-from PyQt6.QtGui import QColor, QCursor
-from PyQt6.QtCore import Qt, pyqtSignal, QPoint
+from PyQt6.QtGui import QColor, QCursor, QIntValidator, QRegularExpressionValidator
+from PyQt6.QtCore import Qt, pyqtSignal, QPoint, QRegularExpression
 
 from typing import Dict, List, Any, Optional
 
@@ -62,11 +62,18 @@ class AccountExplorerTab(QWidget):
         layout: QHBoxLayout = QHBoxLayout(panel)
         
         label_search: QLabel = QLabel("SEARCH BY")
-        label_search.setStyleSheet(f"color: {DarkPalette.ACCENT_BLUE.name()}; font-weight: 800; font-size: 8pt; border: none;")
+        label_search.setStyleSheet(
+            f"""
+            color: {DarkPalette.ACCENT_BLUE.name()}; 
+            font-weight: 800; 
+            font-size: 8pt; 
+            border: none;
+            """
+        )
         layout.addWidget(label_search)
         
         self.search_type = QComboBox()
-        self.search_type.addItems(["Account Number", "Full Name", "Customer Email", "Account ID"])
+        self.search_type.addItems(["Account ID", "Full Name", "Customer Email", "Account Number"])
         self.search_type.setFixedWidth(150)
         self.search_type.setStyleSheet(StyleSheet.COMBO_BOX)
         layout.addWidget(self.search_type)
@@ -76,30 +83,59 @@ class AccountExplorerTab(QWidget):
         self.search_query.setStyleSheet(StyleSheet.LINE_EDIT)
         self.search_query.returnPressed.connect(self.perform_search)
         layout.addWidget(self.search_query)
+
+        self.search_type.currentTextChanged.connect(self._update_search_validator)
         
         search_btn: QPushButton = QPushButton(" SEARCH")
         search_btn.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_FileDialogContentsView))
         search_btn.setStyleSheet(StyleSheet.BUTTON)
         search_btn.clicked.connect(self.perform_search)
         layout.addWidget(search_btn)
-
-        add_btn: QPushButton = QPushButton(" NEW ACC")
-        add_btn.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_FileIcon))
-        add_btn.setStyleSheet(f"""
-            {StyleSheet.BUTTON}
-            background-color: {DarkPalette.ACCENT_GREEN.name()}44;
-            border: 1px solid {DarkPalette.ACCENT_GREEN.name()};
-        """)
-        add_btn.clicked.connect(self._create_new_account)
-        layout.addWidget(add_btn)
         
         return panel
+    
+    def _update_search_validator(self) -> None:
+        t = self.search_type.currentText()
+        self.search_query.clear()
+
+        if t == "Account ID":
+            self.search_query.setValidator(QIntValidator(1, 10**9))
+
+        elif t == "Account Number":
+            self.search_query.setValidator(
+                QRegularExpressionValidator(QRegularExpression(r"\d{8,20}"))
+            )
+
+        elif t == "Customer Email":
+            self.search_query.setValidator(
+                QRegularExpressionValidator(
+                    QRegularExpression(r"^[\w\.-]+@[\w\.-]+\.\w+$")
+                )
+            )
+
+        elif t == "Full Name":
+            self.search_query.setValidator(
+                QRegularExpressionValidator(
+                    QRegularExpression(r"[A-Za-z\s\-]{2,50}")
+                )
+            )
+
+        else:
+            self.search_query.setValidator(None)
 
     def perform_search(self) -> None:
         try:
             self._clear_layout(self.results_layout)
             query: str = self.search_query.text().strip()
             if not query: 
+                return
+
+            if not self.search_query.hasAcceptableInput():
+                QMessageBox.warning(
+                    self,
+                    "Invalid input",
+                    f"Invalid value for '{self.search_type.currentText()}'"
+                )
                 return
 
             search_type: str = self.search_type.currentText()

@@ -4,8 +4,8 @@ from PyQt6.QtWidgets import (
     QFrame, QLabel, QPushButton, QMessageBox, QDialog, QHeaderView, QApplication
 )
 
-from PyQt6.QtGui import QColor, QCursor
-from PyQt6.QtCore import Qt
+from PyQt6.QtGui import QColor, QCursor, QRegularExpressionValidator
+from PyQt6.QtCore import Qt, QRegularExpression
 
 from typing import Dict, List, Any, Optional, Tuple
 
@@ -98,9 +98,16 @@ class AccountDetailsDialog(QDialog):
         btn_add.clicked.connect(self._add_transaction)
         
         self.search_tx = QLineEdit()
+        self.search_tx.setMaxLength(50)
         self.search_tx.setPlaceholderText("Quick filter by category...")
         self.search_tx.setStyleSheet(StyleSheet.LINE_EDIT)
         self.search_tx.textChanged.connect(self.refresh_transactions)
+
+        self.search_tx.setValidator(
+            QRegularExpressionValidator(
+                QRegularExpression(r"[A-Za-z0-9\s\-_]*")
+            )
+        )
 
         ctrl_panel.addWidget(btn_add)
         ctrl_panel.addSpacing(20)
@@ -119,8 +126,22 @@ class AccountDetailsDialog(QDialog):
         self.refresh_transactions()
         
         return widget
+    
+    def _mark_tx_filter_invalid(self, invalid: bool) -> None:
+        if invalid:
+            self.search_tx.setStyleSheet(
+                StyleSheet.LINE_EDIT + "border: 1px solid #e74c3c;"
+            )
+        else:
+            self.search_tx.setStyleSheet(StyleSheet.LINE_EDIT)
 
     def refresh_transactions(self) -> None:
+        if not self.search_tx.hasAcceptableInput():
+            self._mark_tx_filter_invalid(True)
+            return
+        else:
+            self._mark_tx_filter_invalid(False)
+
         query: str = self.search_tx.text().lower().strip()
         tx_list: List[Any] = getattr(self.account, 'transactions', []) or []
         

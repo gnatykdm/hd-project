@@ -4,7 +4,8 @@ from PyQt6.QtWidgets import (
     QDoubleSpinBox
 )
 
-from PyQt6.QtCore import Qt, QDateTime
+from PyQt6.QtGui import QRegularExpressionValidator
+from PyQt6.QtCore import Qt, QDateTime, QRegularExpression
 
 from datetime import datetime
 from typing import Dict, List, Any, Optional, Tuple
@@ -62,7 +63,9 @@ class TransactionEditDialog(QDialog):
         self.category_input.setEditable(True)
         self.category_input.addItems(["Salary", "Transfer", "Food", "Rent", "Shopping", "Entertainment", "Health"])
         self.category_input.setStyleSheet(StyleSheet.COMBO_BOX)
-        
+
+        self.category_input.lineEdit().textChanged.connect(self._validate_category)
+
         self.date_input = QDateTimeEdit(QDateTime.currentDateTime())
         self.date_input.setCalendarPopup(True)
         self.date_input.setStyleSheet(StyleSheet.LINE_EDIT)
@@ -70,6 +73,11 @@ class TransactionEditDialog(QDialog):
         self.merchant_input = QLineEdit()
         self.merchant_input.setPlaceholderText("Optional: Amazon, Starbucks...")
         self.merchant_input.setStyleSheet(StyleSheet.LINE_EDIT)
+
+        self.merchant_input.setMaxLength(50)
+        self.merchant_input.setValidator(QRegularExpressionValidator(
+            QRegularExpression(r"[A-Za-z0-9\s\-_]*")
+        ))
 
         labels: List[Tuple[str, QWidget]] = [
             ("Amount:", self.amount_input), 
@@ -114,6 +122,15 @@ class TransactionEditDialog(QDialog):
         btn_layout.addWidget(self.btn_save)
         layout.addLayout(btn_layout)
 
+    def _validate_category(self):
+        text = self.category_input.currentText().strip()
+        if text == "":
+            self.category_input.setStyleSheet(
+                StyleSheet.COMBO_BOX + "border: 1px solid #e74c3c;"
+            )
+        else:
+            self.category_input.setStyleSheet(StyleSheet.COMBO_BOX)
+
     def load_data(self) -> None:
         if not self.transaction:
             return
@@ -126,17 +143,33 @@ class TransactionEditDialog(QDialog):
         self.date_input.setDateTime(QDateTime(py_dt.year, py_dt.month, py_dt.day, py_dt.hour, py_dt.minute))
 
     def save_data(self) -> None:
+        amount = self.amount_input.value()
+        category = self.category_input.currentText().strip()
+        timestamp = self.date_input.dateTime().toPyDateTime()
+        merchant = self.merchant_input.text().strip()
+
+        if timestamp > datetime.now():
+            QMessageBox.warning(self, "Validation Error", "Timestamp cannot be in the future.")
+            return
+
+        if category == "":
+            QMessageBox.warning(self, "Validation Error", "Category cannot be empty.")
+            return
+
+        if amount == 0.0:
+            QMessageBox.warning(self, "Validation Error", "Amount cannot be zero.")
+            return
+
         data: Dict[str, Any] = {
-            "amount": self.amount_input.value(),
-            "category": self.category_input.currentText(),
-            "timestamp": self.date_input.dateTime().toPyDateTime(),
-            "merchant_name": self.merchant_input.text()
+            "amount": amount,
+            "category": category,
+            "timestamp": timestamp,
+            "merchant_name": merchant
         }
 
         try:
             if self.transaction:
                 self.services['transaction'].update(self.transaction.id, **data)
-                
                 for key, value in data.items():
                     setattr(self.transaction, key, value)
             else:
