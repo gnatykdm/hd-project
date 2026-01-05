@@ -50,26 +50,33 @@ venv\Scripts\activate.bat
 source venv/bin/activate
 ```
 
-3. Install
+3. Install Dependencies and Configure Environment
 ```bash
+# Install required Python packages
 pip install -r requirements.txt
+
+# Copy the example environment file
 cp .env.example .env
-# Edit .env → set DATABASE_URL (e.g. postgresql://user:pass@host:5432/bank_bi or sqlite:///./bank_bi.db)
+
+# Set up your database connection (PostgreSQL example)
+POSTGRES_HOST=localhost
+POSTGRES_PORT=5432
+POSTGRES_DB=bankdb
+POSTGRES_USER=postgres
+POSTGRES_PASSWORD=admin
 ```
 
-4. (Optional) Migrate
-```bash
-alembic upgrade head
 ```
-
-5. Run
+4. Run
 ```bash
+
 # Windows
-./start.bat
-# or
-python main.py
-```
+start.bat
 
+# Unix
+./start.sh
+```
+> The script will automatically run migrations, seeders into your DB, and then start the program.
 ---
 
 ## Project Layout
@@ -88,15 +95,9 @@ hd-project/
 ---
 
 ## Planned
-- FastAPI endpoints for ETL/data loading
 - Sample ETL scripts and data loaders
 - Richer dashboards (Plotly / Matplotlib embedded)
 - Unit & integration tests
-
----
-
-## Contributing
-Contributions welcome. Please open an issue to discuss major changes before submitting a PR.
 
 ---
 
