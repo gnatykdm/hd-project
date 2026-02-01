@@ -2,35 +2,36 @@ from typing import List, Optional, Dict, Any
 from datetime import datetime
 
 from sqlalchemy.orm import Session, joinedload
-from sqlalchemy import select, func, and_
+from sqlalchemy import select, func, and_, delete, update
 
 from app.db.models import Transaction
 from app.db.base import get_db
-
 
 class TransactionService:    
     def __init__(self, db: Session) -> None:
         self.db: Session = db
 
-    def create_transaction(
+    def create(
         self, 
         account_id: int, 
         amount: float, 
         category: str, 
-        merchant_name: str
+        merchant_name: str,
+        timestamp: Optional[datetime] = None
     ) -> Transaction:
-        new_tx: Transaction = Transaction(
+        new_tx = Transaction(
             account_id=account_id,
             amount=amount,
             category=category,
-            merchant_name=merchant_name,
-            timestamp=datetime.utcnow()
+            merchant_name=merchant_name
         )
+        new_tx.timestamp = timestamp or datetime.utcnow() 
+        
         self.db.add(new_tx)
         self.db.commit()
         self.db.refresh(new_tx)
         return new_tx
-
+    
     def get_all(self, pagination: int = 25, offset: int = 0) -> List[Transaction]:
         stmt = (
             select(Transaction)
@@ -139,6 +140,22 @@ class TransactionService:
         result = self.db.execute(stmt)
         return result.scalar() or 0
 
+    def delete(self, transaction_id: int) -> bool:
+        stmt = delete(Transaction).where(Transaction.id == transaction_id)
+        result = self.db.execute(stmt)
+        self.db.commit()
+        return result.rowcount > 0
+
+    def update(self, transaction_id: int, **updates: Any) -> Optional[Transaction]:
+        stmt = (
+            update(Transaction)
+            .where(Transaction.id == transaction_id)
+            .values(**updates)
+            .execution_options(synchronize_session="fetch")
+        )
+        self.db.execute(stmt)
+        self.db.commit()
+        return self.get_by_id(transaction_id)
 
 def get_transaction_service(db: Optional[Session] = None) -> TransactionService:
     if db is None:
